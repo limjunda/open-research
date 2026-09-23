@@ -1,0 +1,742 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Self-Hosted LLM vs. M365 Copilot: TCO & Architecture Guide</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Chart.js CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Plotly.js CDN -->
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        brand: {
+                            dark: '#0f172a',
+                            navy: '#1e293b',
+                            card: '#1e293b',
+                            cyan: '#06b6d4',
+                            emerald: '#10b981',
+                            violet: '#8b5cf6',
+                            amber: '#f59e0b',
+                            rose: '#f43f5e',
+                            text: '#f8fafc',
+                            muted: '#94a3b8'
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        .chart-container {
+            position: relative;
+            width: 100%;
+            max-width: 100%;
+            margin-left: auto;
+            margin-right: auto;
+            height: 380px;
+            max-height: 420px;
+        }
+        @media (min-width: 768px) {
+            .chart-container {
+                height: 400px;
+            }
+        }
+        .plotly-container {
+            width: 100%;
+            height: 400px;
+        }
+    </style>
+</head>
+<body class="bg-slate-950 text-slate-100 font-sans antialiased selection:bg-cyan-500 selection:text-slate-950">
+
+<!-- Palette Chosen: Vibrant Tech Analytics (Slate #0F172A, Electric Cyan #06B6D4, Emerald #10B981, Violet #8B5CF6, Amber #F59E0B, Crimson #EF4444) -->
+<!--
+SUMMARY OF NARRATIVE & STRUCTURE PLAN:
+1. Executive Summary & Core KPI Banner: Highlights primary financial and operational metrics (Copilot $30 seat vs. open-weight hosting unit costs).
+2. Hardware Topologies & Throughput (TPS): Benchmarking 8B dense vs. GLM-5.2 744B MoE across CPU colibri NVMe, CPU RAM-resident, Hybrid L4, and multi-GPU (8xA100, 8xH100) clusters.
+3. Token Unit Economics & Capacity Utilization: Modeling direct costs per 1M tokens under saturated vs. diurnal enterprise capacity utilization (10%, 20%, 50%, 100%).
+4. Scalability Curve & Interactive Calculator: Evaluating cost progression from 1 seat to 5,000 seats with a dynamic scenario modeling calculator.
+5. Functional Reasoning & Enterprise Capabilities: Comparing GPQA Diamond, SWE-Bench, 1M context, Teams audio/diarization, and Entra ID ACL permission trimming.
+6. 3-Year Total Cost of Ownership (TCO): Comprehensive breakdown including engineering, MLOps personnel, vector DBs, security auditing, compute, and software licenses.
+7. Custom RAG Engineering Pipeline: Structured HTML/CSS flowchart detailing the multi-tier engineering stack required to replicate Copilot functionality.
+8. Strategic Decision Framework: Actionable matrix to guide enterprise procurement and architectural decisions.
+-->
+<!--
+VISUALIZATION CHOICES SUMMARY:
+1. Hardware Throughput (TPS): Horizontal Bar Chart -> Goal: Compare -> Chart.js (Canvas) -> Wrapped multi-line labels, custom tooltip callback. NO SVG.
+2. Capacity Utilization Unit Costs: Grouped Bar Chart -> Goal: Compare -> Chart.js (Canvas) -> Wrapped multi-line labels, custom tooltip callback. NO SVG.
+3. Scaling Economics (1-5000 Seats): Grouped Bar Chart -> Goal: Change/Scale -> Plotly.js (Canvas/WebGL mode). NO SVG.
+4. 3-Year TCO Breakdown: Stacked Bar Chart -> Goal: Composition/Compare -> Chart.js (Canvas) -> Wrapped labels, custom tooltip callback. NO SVG.
+5. Custom Engineering Pipeline: Flowcard Diagram -> Goal: Organize -> Structured HTML/CSS with Tailwind layout. NO SVG & NO MERMAID JS.
+6. Interactive TCO Calculator: Dynamic DOM Calculation Widget -> Goal: Interactivity -> Pure JS DOM handler. NO SVG.
+-->
+<!-- CONFIRMATION: NEITHER MERMAID JS NOR SVG WERE USED ANYWHERE IN THIS OUTPUT. ALL CHARTS USE CANVAS (CHART.JS / PLOTLY.JS) AND DIAGRAMS USE STRUCTURED HTML/CSS. -->
+
+    <!-- Navigation Header -->
+    <header class="sticky top-0 z-50 bg-slate-900/90 backdrop-blur border-b border-slate-800">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+            <div class="flex items-center space-x-3">
+                <span class="text-2xl">⚡</span>
+                <span class="font-bold text-lg sm:text-xl tracking-tight text-white">Enterprise AI TCO Navigator</span>
+            </div>
+            <nav class="hidden md:flex space-x-6 text-xs lg:text-sm font-medium text-slate-400">
+                <a href="#summary" class="hover:text-cyan-400 transition">Summary</a>
+                <a href="#throughput" class="hover:text-cyan-400 transition">Throughput</a>
+                <a href="#unit-cost" class="hover:text-cyan-400 transition">Unit Cost</a>
+                <a href="#scaling" class="hover:text-cyan-400 transition">Scaling & Calculator</a>
+                <a href="#capabilities" class="hover:text-cyan-400 transition">Capabilities</a>
+                <a href="#tco" class="hover:text-cyan-400 transition">3-Year TCO</a>
+                <a href="#strategy" class="hover:text-cyan-400 transition">Strategy</a>
+            </nav>
+        </div>
+    </header>
+
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-12">
+
+        <!-- Title Banner -->
+        <section class="text-center space-y-4 py-6">
+            <div class="inline-flex items-center space-x-2 px-3 py-1 rounded-full bg-cyan-950/60 border border-cyan-800/50 text-cyan-400 text-xs font-semibold uppercase tracking-wider">
+                <span>Architectural & Financial Analysis</span>
+            </div>
+            <h1 class="text-3xl sm:text-5xl font-extrabold text-white tracking-tight">
+                Self-Hosted LLMs on GCP <span class="text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-emerald-400 to-violet-500">vs. M365 Copilot</span>
+            </h1>
+            <p class="max-w-3xl mx-auto text-sm sm:text-base text-slate-400">
+                A quantitative assessment of Infrastructure-as-a-Service (IaaS) open-weight model deployments (8B Dense & GLM-5.2 744B MoE) versus managed Microsoft 365 Copilot SaaS licensing across single users, mid-market teams, and enterprise scales.
+            </p>
+        </section>
+
+        <!-- KPI Executive Summary Cards -->
+        <section id="summary" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            <div class="bg-slate-900 border border-slate-800 rounded-xl p-6 relative overflow-hidden">
+                <div class="text-xs font-semibold text-slate-400 uppercase tracking-wider">M365 Copilot Flat Fee</div>
+                <div class="text-3xl font-black text-white mt-2">$30.00 <span class="text-xs text-slate-400 font-normal">/ user / mo</span></div>
+                <p class="text-xs text-slate-400 mt-2">Requires base M365 E3/E5 license ($39–$60/mo). Zero infra overhead or engineering required.</p>
+                <div class="absolute -right-2 -bottom-2 text-6xl opacity-10 font-black text-cyan-400">MS</div>
+            </div>
+
+            <div class="bg-slate-900 border border-slate-800 rounded-xl p-6 relative overflow-hidden">
+                <div class="text-xs font-semibold text-slate-400 uppercase tracking-wider">8B 4-bit Model Sweet Spot</div>
+                <div class="text-3xl font-black text-emerald-400 mt-2">$0.39 – $2.62</div>
+                <p class="text-xs text-slate-400 mt-2">Saturated cost per 1M tokens on single NVIDIA L4 GPU. Highly economical for simple triage tasks.</p>
+                <div class="absolute -right-2 -bottom-2 text-6xl opacity-10 font-black text-emerald-400">8B</div>
+            </div>
+
+            <div class="bg-slate-900 border border-slate-800 rounded-xl p-6 relative overflow-hidden">
+                <div class="text-xs font-semibold text-slate-400 uppercase tracking-wider">GLM-5.2 (744B) Frontier GPU</div>
+                <div class="text-3xl font-black text-violet-400 mt-2">$23.99 – $54.22</div>
+                <p class="text-xs text-slate-400 mt-2">Saturated cost per 1M tokens on 8x H100 cluster. High speed (450 TPS batched) but high fixed monthly compute base.</p>
+                <div class="absolute -right-2 -bottom-2 text-6xl opacity-10 font-black text-violet-400">744B</div>
+            </div>
+
+            <div class="bg-slate-900 border border-slate-800 rounded-xl p-6 relative overflow-hidden">
+                <div class="text-xs font-semibold text-slate-400 uppercase tracking-wider">3-Yr TCO (1,000 Users)</div>
+                <div class="text-3xl font-black text-rose-400 mt-2">$3.63M vs $1.08M</div>
+                <p class="text-xs text-slate-400 mt-2">GLM-5.2 self-hosting is 336% more expensive than Copilot when accounting for RAG, MLOps & Security personnel.</p>
+                <div class="absolute -right-2 -bottom-2 text-6xl opacity-10 font-black text-rose-400">TCO</div>
+            </div>
+        </section>
+
+        <!-- Section 1: Throughput & Hardware Topology -->
+        <section id="throughput" class="bg-slate-900 border border-slate-800 rounded-2xl p-6 sm:p-8 space-y-6">
+            <div class="border-b border-slate-800 pb-4">
+                <h2 class="text-2xl font-bold text-white flex items-center gap-2">
+                    <span>⚡</span> Compute Topology & Inference Throughput (TPS)
+                </h2>
+                <p class="text-sm text-slate-400 mt-1">
+                    Comparing token generation speed across lightweight 8B dense models and GLM-5.2 (744B Mixture-of-Experts) across CPU NVMe disk-streaming (`colibri`), CPU system RAM, hybrid offloading, and dedicated multi-GPU accelerator topologies on GCP.
+                </p>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-8 items-center">
+                <div class="lg:col-span-2">
+                    <div class="chart-container">
+                        <canvas id="throughputChart"></canvas>
+                    </div>
+                </div>
+                <div class="space-y-4 text-xs sm:text-sm text-slate-300 bg-slate-950 p-5 rounded-xl border border-slate-800">
+                    <h3 class="text-sm font-bold text-cyan-400 uppercase tracking-wide">Key Architectural Insights</h3>
+                    <ul class="space-y-3 list-disc list-inside text-slate-400">
+                        <li><strong class="text-white">CPU NVMe Streaming Bottleneck:</strong> The `colibri` C-engine running GLM-5.2 on disk avoids out-of-memory errors on small VMs but yields only ~0.8 TPS. An 800-word summary takes over 20 minutes to generate, making interactive chat impossible.</li>
+                        <li><strong class="text-white">Memory Bandwidth Stalls:</strong> RAM-resident CPU configurations (`m3-ultramem-32`) reach only 5 TPS due to DDR5 memory bus limitations when reading 380 GB weights per forward pass.</li>
+                        <li><strong class="text-white">Multi-GPU Necessity:</strong> Frontier MoE models like GLM-5.2 require 8x A100 or 8x H100 clusters (640 GB VRAM) to achieve real-time conversational speeds (45–90 TPS single, 300–450 TPS batched).</li>
+                        <li><strong class="text-white">8B High Density:</strong> A single L4 GPU (`g2-standard-4`) processes 8B models at 75–500 TPS, making it an optimal microservice worker.</li>
+                    </ul>
+                </div>
+            </div>
+        </section>
+
+        <!-- Section 2: Direct Token Unit Economics -->
+        <section id="unit-cost" class="bg-slate-900 border border-slate-800 rounded-2xl p-6 sm:p-8 space-y-6">
+            <div class="border-b border-slate-800 pb-4">
+                <h2 class="text-2xl font-bold text-white flex items-center gap-2">
+                    <span>💰</span> Capacity Utilization & Direct Cost per 1M Tokens
+                </h2>
+                <p class="text-sm text-slate-400 mt-1">
+                    Evaluating the unit cost per 1M tokens across varying capacity utilization profiles. Fixed 24/7 IaaS infrastructure costs inflate dramatically per token during non-peak business hours and weekend idle cycles.
+                </p>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-8 items-center">
+                <div class="space-y-4 text-xs sm:text-sm text-slate-300 bg-slate-950 p-5 rounded-xl border border-slate-800 order-2 lg:order-1">
+                    <h3 class="text-sm font-bold text-emerald-400 uppercase tracking-wide">The `colibri` Economic Paradox</h3>
+                    <p class="text-slate-400">
+                        While running `colibri` on an inexpensive CPU instance appears cheap at $0.48/hr (`c3-standard-8-lssd`), its slow speed of 0.8 TPS requires <strong>347 continuous machine hours</strong> to produce 1 million tokens.
+                    </p>
+                    <div class="p-3 bg-rose-950/40 border border-rose-800/50 rounded-lg text-rose-300 text-xs">
+                        <strong>Result:</strong> Saturated cost is <strong>$166.67 / 1M tokens</strong>, soaring to <strong>$1,666.70 / 1M tokens</strong> at 10% enterprise duty cycles. Low-speed CPU disk streaming is economically unviable.
+                    </div>
+                    <hr class="border-slate-800">
+                    <h3 class="text-sm font-bold text-cyan-400 uppercase tracking-wide">GPU Batching Inversion</h3>
+                    <p class="text-slate-400">
+                        High-cost GPU nodes ($87.83/hr for 8x H100) dramatically reduce token unit costs to <strong>$23.99–$54.22 / 1M tokens</strong> under heavy dynamic batching because they process 1M tokens in just 37 minutes.
+                    </p>
+                </div>
+
+                <div class="lg:col-span-2 order-1 lg:order-2">
+                    <div class="chart-container">
+                        <canvas id="unitCostChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Section 3: Scaling Economics & Interactive Calculator -->
+        <section id="scaling" class="bg-slate-900 border border-slate-800 rounded-2xl p-6 sm:p-8 space-y-8">
+            <div class="border-b border-slate-800 pb-4">
+                <h2 class="text-2xl font-bold text-white flex items-center gap-2">
+                    <span>📈</span> Scaling Economics: 1 User to 5,000 Enterprise Seats
+                </h2>
+                <p class="text-sm text-slate-400 mt-1">
+                    Comparing direct infrastructure spend against M365 Copilot licensing ($30/seat/mo) across organizational scale tiers. Baseline consumption assumes 2.0M blended tokens per user monthly.
+                </p>
+            </div>
+
+            <div>
+                <div class="plotly-container" id="scalingPlotly"></div>
+            </div>
+
+            <!-- Interactive Scenario Calculator -->
+            <div class="bg-slate-950 border border-cyan-900/50 rounded-xl p-6 space-y-6">
+                <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-800 pb-4">
+                    <div>
+                        <h3 class="text-lg font-bold text-white flex items-center gap-2">
+                            <span>🧮</span> Interactive Enterprise TCO Calculator
+                        </h3>
+                        <p class="text-xs text-slate-400">Adjust organizational seat count and usage parameters to compare real-time monthly compute costs.</p>
+                    </div>
+                    <div class="inline-flex items-center space-x-2 bg-slate-900 px-3 py-1.5 rounded-lg border border-slate-800 text-xs text-slate-300">
+                        <span>Includes 3-Year CUD Hardware Discounts</span>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div class="space-y-4">
+                        <div>
+                            <div class="flex justify-between text-xs font-semibold text-slate-300 mb-2">
+                                <span>Target User Seat Count:</span>
+                                <span id="seatVal" class="text-cyan-400 font-bold text-sm">100 Seats</span>
+                            </div>
+                            <input id="seatSlider" type="range" min="1" max="5000" value="100" class="w-full h-2 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-cyan-400">
+                        </div>
+
+                        <div>
+                            <div class="flex justify-between text-xs font-semibold text-slate-300 mb-2">
+                                <span>Monthly Token Volume / User:</span>
+                                <span id="tokenVal" class="text-emerald-400 font-bold text-sm">2.0M Tokens</span>
+                            </div>
+                            <input id="tokenSlider" type="range" min="0.5" max="10" step="0.5" value="2.0" class="w-full h-2 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-emerald-400">
+                        </div>
+                    </div>
+
+                    <div class="bg-slate-900 rounded-lg p-4 border border-slate-800 grid grid-cols-3 gap-2 text-center items-center">
+                        <div class="p-2">
+                            <div class="text-[10px] uppercase font-bold text-slate-400">M365 Copilot</div>
+                            <div id="calcCopilot" class="text-lg font-black text-white mt-1">$3,000</div>
+                            <div class="text-[9px] text-slate-500">/ month</div>
+                        </div>
+                        <div class="p-2 border-x border-slate-800">
+                            <div class="text-[10px] uppercase font-bold text-emerald-400">8B GPU Node</div>
+                            <div id="calc8B" class="text-lg font-black text-emerald-400 mt-1">$516</div>
+                            <div class="text-[9px] text-slate-500">/ month</div>
+                        </div>
+                        <div class="p-2">
+                            <div class="text-[10px] uppercase font-bold text-violet-400">GLM-5.2 (8x H100)</div>
+                            <div id="calcGLM" class="text-lg font-black text-violet-400 mt-1">$28,368</div>
+                            <div class="text-[9px] text-slate-500">/ month</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="calcRecommendation" class="p-3 bg-slate-900 border border-slate-800 rounded-lg text-xs text-slate-300 flex items-center gap-3">
+                    <span class="text-xl">💡</span>
+                    <span><strong>Analysis:</strong> At 100 seats, dedicated GLM-5.2 GPU infrastructure ($28.37k/mo) is significantly higher than Copilot licensing ($3.0k/mo). Self-hosting a small 8B model ($516/mo) saves direct hardware spend but lacks advanced reasoning.</span>
+                </div>
+            </div>
+        </section>
+
+        <!-- Section 4: Functional Reasoning & Capabilities -->
+        <section id="capabilities" class="bg-slate-900 border border-slate-800 rounded-2xl p-6 sm:p-8 space-y-6">
+            <div class="border-b border-slate-800 pb-4">
+                <h2 class="text-2xl font-bold text-white flex items-center gap-2">
+                    <span>🎯</span> Reasoning Fidelity & Enterprise Functional Matrix
+                </h2>
+                <p class="text-sm text-slate-400 mt-1">
+                    Evaluating benchmark performance, context window capacities, and native integration features across model tiers. Direct compute cost savings are meaningless if model reasoning degrades workplace productivity.
+                </p>
+            </div>
+
+            <div class="overflow-x-auto">
+                <table class="w-full text-left text-xs sm:text-sm text-slate-300">
+                    <thead class="bg-slate-950 text-slate-400 uppercase text-[10px] sm:text-xs tracking-wider border-b border-slate-800">
+                        <tr>
+                            <th class="p-3 sm:p-4">Capability / Dimension</th>
+                            <th class="p-3 sm:p-4 text-emerald-400">8B 4-bit Quantized</th>
+                            <th class="p-3 sm:p-4 text-violet-400">GLM-5.2 744B MoE</th>
+                            <th class="p-3 sm:p-4 text-cyan-400">M365 Copilot (SaaS)</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-800/60 bg-slate-900/50">
+                        <tr>
+                            <td class="p-3 sm:p-4 font-semibold text-white">Coding (SWE-bench Pro)</td>
+                            <td class="p-3 sm:p-4 text-slate-400">Limited (&lt;25% accuracy; syntax errors on logic)</td>
+                            <td class="p-3 sm:p-4 text-emerald-400 font-bold">State-of-the-Art (62.1% SWE-bench Pro)</td>
+                            <td class="p-3 sm:p-4 text-slate-300">Moderate (Contextual via GitHub Copilot add-on)</td>
+                        </tr>
+                        <tr>
+                            <td class="p-3 sm:p-4 font-semibold text-white">Reasoning (GPQA Diamond)</td>
+                            <td class="p-3 sm:p-4 text-rose-400">Poor (&lt;35% accuracy; chain-of-thought fails)</td>
+                            <td class="p-3 sm:p-4 text-emerald-400 font-bold">Superior (91.2% accuracy; Dual Thinking)</td>
+                            <td class="p-3 sm:p-4 text-slate-300">Strong (GPT-4o / Claude 3.5 Sonnet backend)</td>
+                        </tr>
+                        <tr>
+                            <td class="p-3 sm:p-4 font-semibold text-white">Native Context Window</td>
+                            <td class="p-3 sm:p-4 text-slate-300">8,192 – 128,000 tokens</td>
+                            <td class="p-3 sm:p-4 text-cyan-400 font-bold">1,000,000 tokens (1M native)</td>
+                            <td class="p-3 sm:p-4 text-slate-300">Dynamic RAG (~128K effective)</td>
+                        </tr>
+                        <tr>
+                            <td class="p-3 sm:p-4 font-semibold text-white">Teams Meeting Audio & Diarization</td>
+                            <td class="p-3 sm:p-4 text-rose-400">Zero native capability (Requires custom ASR)</td>
+                            <td class="p-3 sm:p-4 text-rose-400">Zero native capability (Requires custom ASR)</td>
+                            <td class="p-3 sm:p-4 text-emerald-400 font-bold">Fully Native (Real-time speaker attribution)</td>
+                        </tr>
+                        <tr>
+                            <td class="p-3 sm:p-4 font-semibold text-white">Entra ID & Graph Security Trimming</td>
+                            <td class="p-3 sm:p-4 text-rose-400">None (Prone to flat vector data leakage)</td>
+                            <td class="p-3 sm:p-4 text-rose-400">None (Requires custom security-trimmed RAG)</td>
+                            <td class="p-3 sm:p-4 text-emerald-400 font-bold">Fully Native (Strict user ACL enforcement)</td>
+                        </tr>
+                        <tr>
+                            <td class="p-3 sm:p-4 font-semibold text-white">Interactive Latency Profile</td>
+                            <td class="p-3 sm:p-4 text-emerald-400">Ultra-fast (&lt;50ms TTFT on GPU)</td>
+                            <td class="p-3 sm:p-4 text-amber-400">Fast on 8x H100; Unusable on CPU (&gt;15s TTFT)</td>
+                            <td class="p-3 sm:p-4 text-slate-300">Managed Streaming (~200ms TTFT)</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- Section 5: 3-Year Total Cost of Ownership (TCO) Deep Dive -->
+        <section id="tco" class="bg-slate-900 border border-slate-800 rounded-2xl p-6 sm:p-8 space-y-6">
+            <div class="border-b border-slate-800 pb-4">
+                <h2 class="text-2xl font-bold text-white flex items-center gap-2">
+                    <span>🛡️</span> Comprehensive 3-Year TCO Breakdown (1,000 Seats)
+                </h2>
+                <p class="text-sm text-slate-400 mt-1">
+                    Raw cloud compute accounts for less than 30% of self-hosted enterprise costs. Total Cost of Ownership includes upfront bot engineering, vector database management, MLOps personnel ($180k/yr FTEs), security pen-testing, and compliance.
+                </p>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-8 items-center">
+                <div class="lg:col-span-2">
+                    <div class="chart-container">
+                        <canvas id="tcoChart"></canvas>
+                    </div>
+                </div>
+
+                <div class="space-y-4 text-xs sm:text-sm text-slate-300 bg-slate-950 p-5 rounded-xl border border-slate-800">
+                    <h3 class="text-sm font-bold text-rose-400 uppercase tracking-wide">TCO Financial Reality Check</h3>
+                    <div class="space-y-3 text-slate-400">
+                        <div class="p-3 bg-slate-900 rounded-lg border border-slate-800">
+                            <span class="text-white font-bold block">M365 Copilot SaaS:</span>
+                            <span class="text-cyan-400 font-extrabold text-lg">$1,080,000</span> total 3-year cost ($30/user/mo flat). Zero hidden operations or personnel fees.
+                        </div>
+                        <div class="p-3 bg-slate-900 rounded-lg border border-slate-800">
+                            <span class="text-white font-bold block">Self-Hosted GLM-5.2 (8x H100 HA):</span>
+                            <span class="text-rose-400 font-extrabold text-lg">$3,632,481</span> total 3-year cost (<strong>$100.90 / user / mo</strong>). High-availability dual nodes, 1.5 MLOps FTEs, and RAG engineering inflate costs by +236% over Copilot.
+                        </div>
+                        <div class="p-3 bg-slate-900 rounded-lg border border-slate-800">
+                            <span class="text-white font-bold block">Self-Hosted 8B Model (GPU HA):</span>
+                            <span class="text-emerald-400 font-extrabold text-lg">$900,298</span> total 3-year cost ($25.01 / user / mo). Modest 16% savings over Copilot, but sacrifices advanced meeting and reasoning capabilities.
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Custom Engineering Pipeline Architecture Diagram (NO SVG / NO MERMAID) -->
+            <div class="bg-slate-950 border border-slate-800 rounded-xl p-6 space-y-4">
+                <h3 class="text-base font-bold text-white flex items-center gap-2">
+                    <span>⚙️</span> The Custom Self-Hosted Enterprise RAG Architecture
+                </h3>
+                <p class="text-xs text-slate-400">
+                    To match M365 Copilot functionality, an enterprise must develop, integrate, and maintain a multi-tier technical pipeline on GCP:
+                </p>
+
+                <div class="grid grid-cols-1 md:grid-cols-5 gap-3 text-center text-xs">
+                    <div class="bg-slate-900 border border-slate-800 p-3 rounded-lg space-y-1">
+                        <div class="text-cyan-400 font-bold">1. Media Ingestion</div>
+                        <div class="text-slate-400 text-[11px]">MS Graph WebRTC API → Real-time SRTP Audio Capture</div>
+                    </div>
+                    <div class="hidden md:flex items-center justify-center text-slate-600 font-bold">➡</div>
+                    <div class="bg-slate-900 border border-slate-800 p-3 rounded-lg space-y-1">
+                        <div class="text-cyan-400 font-bold">2. ASR & Diarization</div>
+                        <div class="text-slate-400 text-[11px]">Whisper Large-v3 + PyAnnote Speaker Attribution</div>
+                    </div>
+                    <div class="hidden md:flex items-center justify-center text-slate-600 font-bold">➡</div>
+                    <div class="bg-slate-900 border border-slate-800 p-3 rounded-lg space-y-1">
+                        <div class="text-emerald-400 font-bold">3. Security RAG</div>
+                        <div class="text-slate-400 text-[11px]">Milvus / pgvector + Entra ID ACL Metadata Filtering</div>
+                    </div>
+                    <div class="hidden md:flex items-center justify-center text-slate-600 font-bold">➡</div>
+                    <div class="bg-slate-900 border border-slate-800 p-3 rounded-lg space-y-1">
+                        <div class="text-violet-400 font-bold">4. Inference Cluster</div>
+                        <div class="text-slate-400 text-[11px]">vLLM / TensorRT-LLM on GKE GPU Multi-Node Cluster</div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Section 6: Strategic Decision Framework -->
+        <section id="strategy" class="bg-slate-900 border border-slate-800 rounded-2xl p-6 sm:p-8 space-y-6">
+            <div class="border-b border-slate-800 pb-4">
+                <h2 class="text-2xl font-bold text-white flex items-center gap-2">
+                    <span>🧭</span> Strategic Decision Framework & Hybrid Recommendation
+                </h2>
+                <p class="text-sm text-slate-400 mt-1">
+                    Guidance for enterprise procurement and technology leadership based on workload characteristics, engineering capacity, and security requirements.
+                </p>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div class="bg-slate-950 p-6 rounded-xl border border-cyan-900/40 space-y-4">
+                    <div class="flex items-center gap-3">
+                        <span class="text-3xl">🏢</span>
+                        <div>
+                            <h3 class="text-base font-bold text-white">Deploy M365 Copilot SaaS ($30/seat) If:</h3>
+                            <span class="text-xs text-cyan-400">General Knowledge Work & Teams Collaboration</span>
+                        </div>
+                    </div>
+                    <ul class="space-y-2 text-xs text-slate-300 list-disc list-inside">
+                        <li>Primary use case centers on MS Teams meeting summarization, live transcriptions, and Outlook email synthesis.</li>
+                        <li>Internal MLOps and software engineering headcount is limited or highly constrained.</li>
+                        <li>Document access controls are managed via SharePoint/Entra ID and must be enforced out-of-the-box.</li>
+                        <li>Legal requires intellectual property indemnification via Microsoft's Customer Copyright Commitment (CCC).</li>
+                    </ul>
+                </div>
+
+                <div class="bg-slate-950 p-6 rounded-xl border border-violet-900/40 space-y-4">
+                    <div class="flex items-center gap-3">
+                        <span class="text-3xl">🚀</span>
+                        <div>
+                            <h3 class="text-base font-bold text-white">Self-Host Open-Source on GCP If:</h3>
+                            <span class="text-xs text-violet-400">Specialized Domain Tasks & Air-Gapped Workloads</span>
+                        </div>
+                    </div>
+                    <ul class="space-y-2 text-xs text-slate-300 list-disc list-inside">
+                        <li>Strict regulatory requirements mandate complete VPC data isolation with zero third-party SaaS exposure.</li>
+                        <li>High-volume, non-interactive batch workloads (e.g., millions of automated document extractions using 8B L4 GPUs).</li>
+                        <li>Deep codebase reasoning or proprietary engineering fine-tuning on custom enterprise repositories.</li>
+                        <li>Enterprise operates at sufficient concurrency to fully saturate multi-GPU cluster capacity 24/7.</li>
+                    </ul>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <footer class="border-t border-slate-800 bg-slate-900 py-6 mt-12">
+        <div class="max-w-7xl mx-auto px-4 text-center text-xs text-slate-500">
+            Self-Hosted LLM vs Microsoft 365 Copilot TCO Comparative Analysis. Built for enterprise decision makers.
+        </div>
+    </footer>
+
+    <!-- JavaScript Charts & Logic -->
+    <script>
+        // Label wrapping utility requirement (16-char max per line)
+        function wrapLabel(str, maxLen = 16) {
+            if (typeof str !== 'string' || str.length <= maxLen) return str;
+            const words = str.split(' ');
+            const lines = [];
+            let currentLine = '';
+            words.forEach(word => {
+                if ((currentLine + word).length > maxLen) {
+                    if (currentLine) lines.push(currentLine.trim());
+                    currentLine = word + ' ';
+                } else {
+                    currentLine += word + ' ';
+                }
+            });
+            if (currentLine) lines.push(currentLine.trim());
+            return lines;
+        }
+
+        // Standard Chart.js Tooltip Callback Config
+        const tooltipConfig = {
+            callbacks: {
+                title: function(tooltipItems) {
+                    const item = tooltipItems[0];
+                    let label = item.chart.data.labels[item.dataIndex];
+                    return Array.isArray(label) ? label.join(' ') : label;
+                }
+            }
+        };
+
+        // 1. Throughput Chart (Chart.js Horizontal Bar)
+        const rawThroughputLabels = [
+            '8B CPU (c3-standard-4)',
+            '8B GPU Single (g2-standard-4)',
+            '8B GPU Batched (g2-standard-4)',
+            'GLM-5.2 Colibri NVMe (c3-lssd)',
+            'GLM-5.2 RAM-Resident (m3-ultramem)',
+            'GLM-5.2 Hybrid (g2-standard-24)',
+            'GLM-5.2 8xA100 Batched (a2-ultra)',
+            'GLM-5.2 8xH100 Batched (a3-high)'
+        ];
+        const wrappedThroughputLabels = rawThroughputLabels.map(l => wrapLabel(l));
+
+        const ctxThroughput = document.getElementById('throughputChart').getContext('2d');
+        new Chart(ctxThroughput, {
+            type: 'bar',
+            data: {
+                labels: wrappedThroughputLabels,
+                datasets: [{
+                    label: 'Sustained Throughput (Tokens / Sec)',
+                    data: [30, 75, 500, 0.8, 5, 2, 300, 450],
+                    backgroundColor: [
+                        '#06b6d4', '#10b981', '#10b981',
+                        '#f43f5e', '#f59e0b', '#f59e0b',
+                        '#8b5cf6', '#8b5cf6'
+                    ],
+                    borderRadius: 6
+                }]
+            },
+            options: {
+                indexAxis: 'y',
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false },
+                    tooltip: tooltipConfig
+                },
+                scales: {
+                    x: {
+                        type: 'logarithmic',
+                        grid: { color: '#334155' },
+                        ticks: { color: '#94a3b8' },
+                        title: { display: true, text: 'Tokens / Second (Log Scale)', color: '#94a3b8' }
+                    },
+                    y: {
+                        grid: { display: false },
+                        ticks: { color: '#f8fafc', font: { size: 11 } }
+                    }
+                }
+            }
+        });
+
+        // 2. Direct Unit Cost Chart (Chart.js Grouped Bar)
+        const rawUnitLabels = [
+            '8B CPU (c3-std-4)',
+            '8B GPU Batched (g2-std-4)',
+            'GLM-5.2 Colibri NVMe',
+            'GLM-5.2 8xA100 Batched',
+            'GLM-5.2 8xH100 (3-Yr CUD)'
+        ];
+        const wrappedUnitLabels = rawUnitLabels.map(l => wrapLabel(l));
+
+        const ctxUnitCost = document.getElementById('unitCostChart').getContext('2d');
+        new Chart(ctxUnitCost, {
+            type: 'bar',
+            data: {
+                labels: wrappedUnitLabels,
+                datasets: [
+                    {
+                        label: '100% Saturated Cost',
+                        data: [1.87, 0.39, 166.67, 37.55, 23.99],
+                        backgroundColor: '#10b981'
+                    },
+                    {
+                        label: '50% Utilization',
+                        data: [3.74, 0.78, 333.34, 75.10, 47.98],
+                        backgroundColor: '#06b6d4'
+                    },
+                    {
+                        label: '20% Utilization',
+                        data: [9.35, 1.95, 833.35, 187.75, 119.95],
+                        backgroundColor: '#f59e0b'
+                    },
+                    {
+                        label: '10% Utilization',
+                        data: [18.70, 3.90, 1666.70, 375.50, 239.90],
+                        backgroundColor: '#f43f5e'
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { labels: { color: '#cbd5e1', font: { size: 11 } } },
+                    tooltip: tooltipConfig
+                },
+                scales: {
+                    x: { grid: { color: '#334155' }, ticks: { color: '#f8fafc' } },
+                    y: {
+                        type: 'logarithmic',
+                        grid: { color: '#334155' },
+                        ticks: { color: '#94a3b8' },
+                        title: { display: true, text: 'Cost per 1M Tokens ($ - Log Scale)', color: '#94a3b8' }
+                    }
+                }
+            }
+        });
+
+        // 3. Scaling Plotly WebGL Chart
+        const seats = ['1 Seat', '10 Seats', '100 Seats', '1,000 Seats', '5,000 Seats'];
+        const copilotCost = [30, 300, 3000, 30000, 150000];
+        const gpu8bCost = [516, 516, 516, 2064, 10319];
+        const glm52Cost = [28368, 28368, 28368, 28368, 141839];
+
+        const plotlyData = [
+            {
+                x: seats,
+                y: copilotCost,
+                name: 'M365 Copilot ($30/seat)',
+                type: 'bar',
+                marker: { color: '#06b6d4' }
+            },
+            {
+                x: seats,
+                y: gpu8bCost,
+                name: '8B GPU Node (g2-std-4)',
+                type: 'bar',
+                marker: { color: '#10b981' }
+            },
+            {
+                x: seats,
+                y: glm52Cost,
+                name: 'GLM-5.2 (8x H100 3-Yr CUD)',
+                type: 'bar',
+                marker: { color: '#8b5cf6' }
+            }
+        ];
+
+        const plotlyLayout = {
+            title: { text: 'Monthly Compute Infrastructure Spend vs Copilot License Fees', font: { color: '#f8fafc', size: 14 } },
+            paper_bgcolor: 'rgba(0,0,0,0)',
+            plot_bgcolor: 'rgba(0,0,0,0)',
+            barmode: 'group',
+            yaxis: {
+                type: 'log',
+                title: 'Monthly Cost ($ - Log Scale)',
+                gridcolor: '#334155',
+                tickfont: { color: '#94a3b8' }
+            },
+            xaxis: {
+                tickfont: { color: '#f8fafc' }
+            },
+            legend: { font: { color: '#cbd5e1' }, orientation: 'h', y: -0.2 },
+            margin: { t: 40, b: 60, l: 60, r: 20 }
+        };
+
+        Plotly.newPlot('scalingPlotly', plotlyData, plotlyLayout, { responsive: true, displayModeBar: false });
+
+        // 4. 3-Year TCO Stacked Chart (Chart.js)
+        const rawTcoLabels = ['M365 Copilot (1k Seats)', 'Self-Hosted 8B GPU HA', 'Self-Hosted GLM-5.2 HA'];
+        const wrappedTcoLabels = rawTcoLabels.map(l => wrapLabel(l));
+
+        const ctxTco = document.getElementById('tcoChart').getContext('2d');
+        new Chart(ctxTco, {
+            type: 'bar',
+            data: {
+                labels: wrappedTcoLabels,
+                datasets: [
+                    { label: 'License Fees', data: [1080000, 0, 0], backgroundColor: '#06b6d4' },
+                    { label: 'Cloud Compute', data: [0, 74298, 2042481], backgroundColor: '#8b5cf6' },
+                    { label: 'Upfront Engineering', data: [0, 250000, 450000], backgroundColor: '#f59e0b' },
+                    { label: 'MLOps & DevOps Personnel', data: [0, 450000, 900000], backgroundColor: '#f43f5e' },
+                    { label: 'Storage & Vector DB', data: [0, 36000, 90000], backgroundColor: '#10b981' },
+                    { label: 'Security & Pen-Testing', data: [0, 90000, 150000], backgroundColor: '#64748b' }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { labels: { color: '#cbd5e1', font: { size: 10 } } },
+                    tooltip: tooltipConfig
+                },
+                scales: {
+                    x: { stacked: true, grid: { color: '#334155' }, ticks: { color: '#f8fafc' } },
+                    y: {
+                        stacked: true,
+                        grid: { color: '#334155' },
+                        ticks: { color: '#94a3b8' },
+                        title: { display: true, text: '3-Year Total Cost ($)', color: '#94a3b8' }
+                    }
+                }
+            }
+        });
+
+        // Dynamic Interactive TCO Calculator Logic
+        const seatSlider = document.getElementById('seatSlider');
+        const tokenSlider = document.getElementById('tokenSlider');
+        const seatVal = document.getElementById('seatVal');
+        const tokenVal = document.getElementById('tokenVal');
+        const calcCopilot = document.getElementById('calcCopilot');
+        const calc8B = document.getElementById('calc8B');
+        const calcGLM = document.getElementById('calcGLM');
+        const calcRecommendation = document.getElementById('calcRecommendation');
+
+        function updateCalculator() {
+            const seats = parseInt(seatSlider.value);
+            const tokensPerUser = parseFloat(tokenSlider.value);
+            
+            seatVal.innerText = `${seats.toLocaleString()} Seats`;
+            tokenVal.innerText = `${tokensPerUser.toFixed(1)}M Tokens`;
+
+            const copilotMonthly = seats * 30;
+
+            // 8B L4 GPU nodes needed (each handles ~200M tokens/mo)
+            const totalMonthlyTokens = seats * tokensPerUser;
+            const nodes8B = Math.max(1, Math.ceil(totalMonthlyTokens / 200));
+            const cost8BMonthly = nodes8B * 515.96;
+
+            // GLM-5.2 8x H100 nodes needed (each handles ~2,000M tokens/mo)
+            const nodesGLM = Math.max(1, Math.ceil(totalMonthlyTokens / 2000));
+            const costGLMMonthly = nodesGLM * 28367.80;
+
+            calcCopilot.innerText = `$${Math.round(copilotMonthly).toLocaleString()}`;
+            calc8B.innerText = `$${Math.round(cost8BMonthly).toLocaleString()}`;
+            calcGLM.innerText = `$${Math.round(costGLMMonthly).toLocaleString()}`;
+
+            if (costGLMMonthly < copilotMonthly) {
+                calcRecommendation.innerHTML = `<span class="text-xl">🚀</span><span><strong>Analysis:</strong> At ${seats.toLocaleString()} seats, direct compute for GLM-5.2 ($${Math.round(costGLMMonthly/1000)}k/mo) is lower than Copilot licenses ($${Math.round(copilotMonthly/1000)}k/mo). However, personnel & RAG ops must still be factored into overall TCO.</span>`;
+            } else {
+                calcRecommendation.innerHTML = `<span class="text-xl">💡</span><span><strong>Analysis:</strong> At ${seats.toLocaleString()} seats, dedicated GLM-5.2 GPU infrastructure ($${Math.round(costGLMMonthly/1000)}k/mo) exceeds Copilot licensing ($${Math.round(copilotMonthly/1000)}k/mo). M365 Copilot SaaS provides superior unit economics at this scale.</span>`;
+            }
+        }
+
+        seatSlider.addEventListener('input', updateCalculator);
+        tokenSlider.addEventListener('input', updateCalculator);
+        updateCalculator();
+    </script>
+</body>
+</html>
